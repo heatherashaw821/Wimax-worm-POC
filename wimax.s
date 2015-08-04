@@ -347,7 +347,7 @@ sockaddr:
 .short 0x2      @ AF_INET
 .short 0x5000	@ port
 ip:
-.byte 127,0,0,2	@ IP
+.byte 10,0,0,2	@ IP
 
 localsock:
 .short 0x2      @ AF_INET
